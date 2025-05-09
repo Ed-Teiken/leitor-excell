@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leitor de .xlsx de Eduardo Teiken</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f8f5;
+            margin: 20px;
+            color: #333;
+        }
+        h1 {
+            text-align: center;
+            color: #2e7d32;
+        }
+        input[type="file"] {
+            display: block;
+            margin: 20px auto;
+            padding: 10px;
+            border: 2px solid #2e7d32;
+            border-radius: 8px;
+            background-color: #ffffff;
+            cursor: pointer;
+        }
+        table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            margin-top: 20px;
+            border: 2px solid #2e7d32;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        th, td {
+            padding: 10px;
+            border-bottom: 1px solid #c8e6c9;
+            text-align: left;
+        }
+        th {
+            background-color: #a5d6a7;
+            color: #1b5e20;
+        }
+        tr:nth-child(even) {
+            background-color: #e8f5e9;
+        }
+        tr:hover {
+            background-color: #c8e6c9;
+        }
+        input.filter-input {
+            width: 90%;
+            padding: 4px;
+            margin-bottom: 4px;
+            border: 1px solid #2e7d32;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Leitor de .xlsx de Eduardo Teiken</h1>
+    <input type="file" id="arquivoInput" accept=".xlsx, .xls" />
+    <table id="tabelaDados"></table>
+
+    <script>
+        const arquivoInput = document.getElementById('arquivoInput');
+        const tabelaDados = document.getElementById('tabelaDados');
+        let originalData = [];
+
+        arquivoInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) {
+                alert('Nenhum arquivo selecionado.');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                try {
+                    const data = new Uint8Array(event.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+                    originalData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+
+                    if (originalData.length === 0) {
+                        alert('A planilha está vazia.');
+                        return;
+                    }
+
+                    renderTable(originalData);
+                } catch (error) {
+                    alert('Erro ao ler o arquivo: ' + error.message);
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        });
+
+        function renderTable(data) {
+            const header = data[0];
+            const body = data.slice(1);
+
+            const filterRow = `<tr>
+                ${header.map((_, i) => `<th><input class="filter-input" data-col="${i}" placeholder="Filtrar..."></th>`).join('')}
+            </tr>`;
+
+            const headerRow = `<tr>${header.map(col => `<th>${escapeHtml(col)}</th>`).join('')}</tr>`;
+
+            const tbodyRows = body.map(row => `
+                <tr>${header.map((_, i) => `<td>${escapeHtml(row[i] ?? '')}</td>`).join('')}</tr>
+            `).join('');
+
+            tabelaDados.innerHTML = `
+                <thead>
+                    ${filterRow}
+                    ${headerRow}
+                </thead>
+                <tbody>
+                    ${tbodyRows}
+                </tbody>
+            `;
+
+            document.querySelectorAll('.filter-input').forEach(input => {
+                input.addEventListener('input', applyFilters);
+            });
+        }
+
+        function applyFilters() {
+            const filters = Array.from(document.querySelectorAll('.filter-input')).map(input => input.value.toLowerCase());
+            const tbody = tabelaDados.querySelector('tbody');
+            const header = originalData[0];
+            const body = originalData.slice(1);
+
+            const filteredRows = body.filter(row =>
+                row.every((cell, index) => cell.toString().toLowerCase().includes(filters[index]))
+            );
+
+            tbody.innerHTML = filteredRows.map(row => `
+                <tr>${header.map((_, i) => `<td>${escapeHtml(row[i] ?? '')}</td>`).join('')}</tr>
+            `).join('');
+        }
+
+        function escapeHtml(text) {
+            return String(text).replace(/[&<>"']/g, function (match) {
+                const escapeMap = {
+                    '&': '&amp;',
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    '"': '&quot;',
+                    "'": '&#039;'
+                };
+                return escapeMap[match];
+            });
+        }
+    </script>
+</body>
+</html>
